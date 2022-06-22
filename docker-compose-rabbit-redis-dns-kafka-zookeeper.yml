@@ -1,0 +1,71 @@
+services:
+  source-testingtool:
+    image: ${REGISTRY_NAME}/source-testingtool:${RELEASE_VERSION}
+    container_name: source-testingtool
+    hostname: source-testingtool
+    environment:
+      - GELF_HOST
+      - APPLICATION_NAME=source-testingtool
+      - STARTING_ORDER_WAIT_FOR_CONTAINERS=redis-source-testingtool:6379;rabbitmq:5672;kafka-server:9092;
+    depends_on:
+      - redis-source-testingtool
+      - rabbitmq
+      - kafka-server
+
+  rabbitmq:
+    image: rabbitmq:${RABBITMQ_VERSION}
+    container_name: rabbitmq
+    hostname: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: rabbitmqctl node_health_check | grep -q '^Health check passed' || exit 1
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+
+  redis-source-testingtool:
+    image: redis:${RELEASE_VERSION}
+    container_name: redis-source-testingtool
+    hostname: redis-source-testingtool
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: redis-cli ping | grep -q '^PONG' || exit 1
+
+  zookeeper:
+    image: bitnami/zookeeper:${RELEASE_VERSION}
+    ports:
+      - "2181:2181"
+    volumes:
+      - "zookeeper-data:/var/lib/zookeeper"
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    restart: unless-stopped
+
+  kafka:
+    image: bitnami/kafka:${RELEASE_VERSION}
+    ports:
+      - "9092:9092"
+    environment:
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+    volumes:
+      - "kafka-data:/var/lib/kafka"
+    depends_on:
+      - zookeeper
+
+  dns-proxy-server:
+    image: defreitas/dns-proxy-server
+    container_name: dns-proxy-server
+    hostname: dns-proxy-server
+    ports:
+      - "5380:5380"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /etc/resolv.conf:/etc/resolv.conf
+volumes:
+  rabbitmq-data:
+  kafka-data:
+  zookeeper-data:
